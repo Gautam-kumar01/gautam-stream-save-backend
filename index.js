@@ -78,7 +78,7 @@ app.get('/download', (req, res) => {
             .on('error', (err) => {
                 console.error('Download Error:', err);
                 if (!res.headersSent) {
-                    res.status(500).send('Download failed');
+                    res.status(500).send(`Download failed: ${err.message}`);
                 }
             })
             .pipe(res);

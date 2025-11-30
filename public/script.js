@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showLoading();
 
         try {
-            const response = await fetch(`http://localhost:3000/api/video-info?url=${encodeURIComponent(url)}`);
+            const response = await fetch(`/api/video-info?url=${encodeURIComponent(url)}`);
 
             if (!response.ok) {
                 const errorData = await response.json();
@@ -112,7 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (data.qualities && data.qualities.length > 0) {
             qualityGrid.innerHTML = data.qualities.map(q => {
                 const badge = q.hd ? 'HD' : 'SD';
-                const downloadLink = `http://localhost:3000/download?url=${encodeURIComponent(originalUrl)}&itag=${q.itag}&title=${encodeURIComponent(data.title)}`;
+                const downloadLink = `/download?url=${encodeURIComponent(originalUrl)}&itag=${q.itag}&title=${encodeURIComponent(data.title)}`;
 
                 return `
                 <a href="${downloadLink}" class="quality-card" target="_blank">
