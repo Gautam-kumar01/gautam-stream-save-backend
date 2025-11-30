@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const ytdl = require('@distube/ytdl-core');
 const app = express();
 
 // Use PORT from environment variables (required for Cloud Hosting) or default to 3000
@@ -14,21 +15,8 @@ app.get('/', (req, res) => {
     res.send('Gautam Stream Save Backend is Running!');
 });
 
-// Mock database of video info
-const MOCK_VIDEO_DATA = {
-    title: "Cinematic Travel Video - 4K HDR 60FPS",
-    duration: "12:45",
-    thumbnail: "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?q=80&w=2070&auto=format&fit=crop",
-    qualities: [
-        { label: '4K Ultra HD', size: '845.2 MB', hd: true },
-        { label: '1080p Full HD', size: '245.5 MB', hd: true },
-        { label: '720p HD', size: '124.1 MB', hd: true },
-        { label: '480p', size: '62.4 MB', hd: false }
-    ]
-};
-
 // API Endpoint to get video info
-app.get('/api/video-info', (req, res) => {
+app.get('/api/video-info', async (req, res) => {
     const videoUrl = req.query.url;
     console.log(`Received request for URL: ${videoUrl}`);
 
@@ -36,10 +24,38 @@ app.get('/api/video-info', (req, res) => {
         return res.status(400).json({ error: 'URL is required' });
     }
 
-    // Simulate processing delay
-    setTimeout(() => {
-        res.json(MOCK_VIDEO_DATA);
-    }, 1500);
+    if (!ytdl.validateURL(videoUrl)) {
+        return res.status(400).json({ error: 'Invalid YouTube URL' });
+    }
+
+    try {
+        const info = await ytdl.getInfo(videoUrl);
+        const title = info.videoDetails.title;
+        const duration = info.videoDetails.lengthSeconds;
+        const thumbnail = info.videoDetails.thumbnails[info.videoDetails.thumbnails.length - 1].url; // Highest quality
+
+        // Map formats to the expected structure
+        const qualities = info.formats
+            .filter(format => format.hasVideo && format.hasAudio) // Filter for combined formats for simplicity
+            .map(format => ({
+                label: format.qualityLabel || 'Unknown',
+                size: 'Unknown', // ytdl doesn't always provide content length for all formats immediately
+                hd: (format.qualityLabel && (format.qualityLabel.includes('720') || format.qualityLabel.includes('1080') || format.qualityLabel.includes('4K'))),
+                url: format.url
+            }));
+
+        const videoData = {
+            title,
+            duration: new Date(duration * 1000).toISOString().substr(11, 8), // Convert seconds to HH:MM:SS
+            thumbnail,
+            qualities
+        };
+
+        res.json(videoData);
+    } catch (error) {
+        console.error('Error fetching video info:', error.message);
+        res.status(500).json({ error: 'Failed to fetch video info' });
+    }
 });
 
 // API Endpoint to trigger download
