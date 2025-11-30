@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const ytdl = require('@distube/ytdl-core');
+const path = require('path');
 const app = express();
 
 // Use PORT from environment variables (required for Cloud Hosting) or default to 3000
@@ -10,10 +11,11 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Root endpoint to check if server is running
-app.get('/', (req, res) => {
-    res.send('Gautam Stream Save Backend is Running!');
-});
+// --- THE FIX IS HERE ---
+// This tells your Express server to serve static files (like your HTML, CSS, and client-side JS)
+// from a folder named 'public'. This line MUST come before your API routes.
+app.use(express.static(path.join(__dirname, 'public')));
+// -------------------------
 
 // API Endpoint to get video info
 app.get('/api/video-info', async (req, res) => {
@@ -41,7 +43,8 @@ app.get('/api/video-info', async (req, res) => {
                 label: format.qualityLabel || 'Unknown',
                 size: 'Unknown', // ytdl doesn't always provide content length for all formats immediately
                 hd: (format.qualityLabel && (format.qualityLabel.includes('720') || format.qualityLabel.includes('1080') || format.qualityLabel.includes('4K'))),
-                url: format.url
+                url: format.url,
+                itag: format.itag // Unique ID for the format
             }));
 
         const videoData = {
@@ -60,9 +63,30 @@ app.get('/api/video-info', async (req, res) => {
 
 // API Endpoint to trigger download
 app.get('/download', (req, res) => {
-    const quality = req.query.quality;
-    console.log(`Downloading video in ${quality}...`);
-    res.send(`Simulated download of video in ${quality} started!`);
+    const { url, itag, title } = req.query;
+
+    if (!url || !itag) {
+        return res.status(400).send('URL and Quality (itag) are required');
+    }
+
+    try {
+        console.log(`Starting download for URL: ${url} with itag: ${itag}`);
+
+        res.header('Content-Disposition', `attachment; filename="${title || 'video'}.mp4"`);
+
+        ytdl(url, { quality: itag })
+            .on('error', (err) => {
+                console.error('Download Error:', err);
+                if (!res.headersSent) {
+                    res.status(500).send('Download failed');
+                }
+            })
+            .pipe(res);
+
+    } catch (error) {
+        console.error('Error starting download:', error);
+        res.status(500).send('Failed to start download');
+    }
 });
 
 app.listen(PORT, () => {
