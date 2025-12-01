@@ -11,6 +11,14 @@ document.addEventListener('DOMContentLoaded', () => {
         'xxx', 'porn', 'adult', 'sex', 'nude', 'naked', 'erotic', 'nsfw', '18+', 'uncensored'
     ];
 
+    // Health Check
+    fetch('/health')
+        .then(res => {
+            if (res.ok) console.log('Server is healthy');
+            else console.error('Server health check failed');
+        })
+        .catch(err => console.error('Server unreachable:', err));
+
     downloadBtn.addEventListener('click', handleDownload);
     videoUrlInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') handleDownload();
@@ -59,7 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error(error);
             let errorMsg = error.message || 'An error occurred while fetching video details.';
             if (error.message.includes('Failed to fetch')) {
-                errorMsg = 'Error: Could not connect to server. Make sure the backend is running on port 3000.';
+                errorMsg = 'Error: Could not connect to server. The server might be waking up (wait 30s) or is offline.';
             }
             showError(errorMsg);
             resetButton();

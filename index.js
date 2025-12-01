@@ -31,13 +31,16 @@ app.get('/api/video-info', async (req, res) => {
     }
 
     try {
-        const info = await ytdl.getInfo(videoUrl, {
-            requestOptions: {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        const info = await Promise.race([
+            ytdl.getInfo(videoUrl, {
+                requestOptions: {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                    }
                 }
-            }
-        });
+            }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Request timed out')), 25000))
+        ]);
         const title = info.videoDetails.title;
         const duration = info.videoDetails.lengthSeconds;
         const thumbnail = info.videoDetails.thumbnails[info.videoDetails.thumbnails.length - 1].url; // Highest quality
