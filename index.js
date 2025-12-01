@@ -89,6 +89,19 @@ app.get('/download', (req, res) => {
     }
 });
 
+app.get('/health', (req, res) => {
+    res.status(200).send('OK');
+});
+
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
+});
+
+// Prevent server from crashing on unhandled errors
+process.on('uncaughtException', (err) => {
+    console.error('Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
