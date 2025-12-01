@@ -83,7 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error(error);
             let errorMsg = error.message || 'An error occurred while fetching video details.';
-            if (error.message.includes('Failed to fetch')) {
+            if (error.message === 'Failed to fetch' || error.message.includes('NetworkError')) {
                 errorMsg = 'Error: Could not connect to server. The server might be waking up (wait 30s) or is offline.';
             }
             showError(errorMsg);

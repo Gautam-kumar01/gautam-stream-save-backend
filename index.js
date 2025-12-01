@@ -66,7 +66,7 @@ app.get('/api/video-info', async (req, res) => {
         res.json(videoData);
     } catch (error) {
         console.error('Error fetching video info:', error.message);
-        res.status(500).json({ error: 'Failed to fetch video info' });
+        res.status(500).json({ error: 'Unable to retrieve video details' });
     }
 });
 
