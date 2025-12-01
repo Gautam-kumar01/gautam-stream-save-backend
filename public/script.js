@@ -128,43 +128,5 @@ document.addEventListener('DOMContentLoaded', () => {
         resultsSection.classList.remove('hidden');
     }
 
-    // 3D Background & Tilt Effect Logic
-    function init3DVisuals() {
-        const bgContainer = document.querySelector('.background-blobs');
-        const card = document.querySelector('.downloader-card');
-
-        if (!bgContainer || !card) return;
-
-        // Create Stars
-        for (let i = 0; i < 200; i++) {
-            const star = document.createElement('div');
-            star.className = 'star';
-            star.style.left = `${Math.random() * 100}%`;
-            star.style.top = `${Math.random() * 100}%`;
-            star.style.animationDelay = `${Math.random() * 20}s`;
-            bgContainer.appendChild(star);
-        }
-
-        // Add Grid Floor
-        const grid = document.createElement('div');
-        grid.className = 'grid-floor';
-        bgContainer.appendChild(grid);
-
-        // 3D Tilt Effect
-        document.addEventListener('mousemove', (e) => {
-            if (window.innerWidth < 768) return; // Disable on mobile
-
-            const xAxis = (window.innerWidth / 2 - e.pageX) / 25;
-            const yAxis = (window.innerHeight / 2 - e.pageY) / 25;
-
-            card.style.transform = `perspective(1000px) rotateY(${xAxis}deg) rotateX(${yAxis}deg)`;
-        });
-
-        // Reset on mouse leave
-        document.addEventListener('mouseleave', () => {
-            card.style.transform = `perspective(1000px) rotateY(0deg) rotateX(0deg)`;
-        });
-    }
-
-    init3DVisuals();
+    // 3D Visuals Removed
 });
