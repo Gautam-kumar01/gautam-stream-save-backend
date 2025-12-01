@@ -81,7 +81,9 @@ app.get('/download', (req, res) => {
     try {
         console.log(`Starting download for URL: ${url} with itag: ${itag}`);
 
-        res.header('Content-Disposition', `attachment; filename="${title || 'video'}.mp4"`);
+        // Sanitize title to remove special characters that might break the header
+        const sanitizedTitle = (title || 'video').replace(/[^a-zA-Z0-9-_ ]/g, '').trim();
+        res.header('Content-Disposition', `attachment; filename="${sanitizedTitle}.mp4"`);
 
         ytdl(url, { quality: itag })
             .on('error', (err) => {

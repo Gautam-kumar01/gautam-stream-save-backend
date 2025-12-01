@@ -11,8 +11,25 @@ document.addEventListener('DOMContentLoaded', () => {
         'xxx', 'porn', 'adult', 'sex', 'nude', 'naked', 'erotic', 'nsfw', '18+', 'uncensored'
     ];
 
+    // Determine API Base URL
+    function getApiBaseUrl() {
+        const hostname = window.location.hostname;
+        // If running on localhost (but not port 3000) or via file protocol, assume backend is at localhost:3000
+        if ((hostname === 'localhost' || hostname === '127.0.0.1') && window.location.port !== '3000') {
+            return 'http://localhost:3000';
+        }
+        if (window.location.protocol === 'file:') {
+            return 'http://localhost:3000';
+        }
+        // Otherwise (production or same-origin), use relative path
+        return '';
+    }
+
+    const API_BASE_URL = getApiBaseUrl();
+
+
     // Health Check
-    fetch('/health')
+    fetch(`${API_BASE_URL}/health`)
         .then(res => {
             if (res.ok) console.log('Server is healthy');
             else console.error('Server health check failed');
@@ -53,7 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showLoading();
 
         try {
-            const response = await fetch(`/api/video-info?url=${encodeURIComponent(url)}`);
+            const response = await fetch(`${API_BASE_URL}/api/video-info?url=${encodeURIComponent(url)}`);
 
             if (!response.ok) {
                 const errorData = await response.json();
@@ -120,7 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (data.qualities && data.qualities.length > 0) {
             qualityGrid.innerHTML = data.qualities.map(q => {
                 const badge = q.hd ? 'HD' : 'SD';
-                const downloadLink = `/download?url=${encodeURIComponent(originalUrl)}&itag=${q.itag}&title=${encodeURIComponent(data.title)}`;
+                const downloadLink = `${API_BASE_URL}/download?url=${encodeURIComponent(originalUrl)}&itag=${q.itag}&title=${encodeURIComponent(data.title)}`;
 
                 return `
                 <a href="${downloadLink}" class="quality-card" target="_blank">
