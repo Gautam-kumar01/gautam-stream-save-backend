@@ -1,0 +1,12 @@
+SpeechRecognition
+pyttsx3
+sounddevice
+numpy
+scipy
+pywhatkit
+pyautogui
+screen_brightness_control
+wikipedia
+psutil
+gTTS
+playsound==1.2.2
