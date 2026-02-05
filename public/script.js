@@ -73,8 +73,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(`${API_BASE_URL}/api/video-info?url=${encodeURIComponent(url)}`);
 
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to fetch video info');
+                let errorMessage = 'Failed to fetch video info';
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.error || errorMessage;
+                    if (errorData.logs) {
+                        errorMessage += '\n\n--- DEBUG LOGS ---\n' +
+                            errorData.logs.map(l => `[${l.strategy}] ${l.error}`).join('\n');
+                    }
+                } catch (e) {
+                    // Check if it's a text response (like 404 Not Found HTML)
+                    const text = await response.text();
+                    console.error('Non-JSON Error Response:', text);
+                }
+                throw new Error(errorMessage);
             }
 
             const data = await response.json();
