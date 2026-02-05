@@ -80,18 +80,35 @@ app.get('/api/video-info', async (req, res) => {
 
     let errorLog = [];
 
-    // STRATEGY 1: Try yt-dlp (Primary)
-    if (fs.existsSync(ytDlpWrap.getBinaryPath())) {
+    // Check if binary exists before attempting to use it
+    if (!fs.existsSync(ytDlpWrap.getBinaryPath())) {
+        console.error(`yt-dlp binary not found at: ${ytDlpWrap.getBinaryPath()}`);
+        // Log this as a strategy failure, but don't return immediately, try fallback
+        errorLog.push({ strategy: 'yt-dlp', error: 'yt-dlp binary missing' });
+    } else {
+        // STRATEGY 1: Try yt-dlp (Primary)
         try {
             console.log(`[Strategy 1] Fetching metadata using yt-dlp...`);
 
-            const stdout = await ytDlpWrap.execPromise([
+            const args = [
                 videoUrl,
                 '--dump-json',
                 '--no-playlist',
                 '--extractor-args', 'youtube:player_client=default',
                 '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            ]);
+            ];
+
+            // CHECK FOR COOKIES
+            const cookiesPath = path.join(__dirname, 'cookies.txt');
+            if (fs.existsSync(cookiesPath)) {
+                console.log('Found cookies.txt, using for authentication...');
+                args.push('--cookies', cookiesPath);
+            } else {
+                console.log('No cookies.txt found. Requests may be blocked by YouTube if server IP is flagged.');
+            }
+
+            // Use execPromise to pass custom arguments
+            const stdout = await ytDlpWrap.execPromise(args);
 
             const metadata = JSON.parse(stdout);
 
@@ -183,11 +200,18 @@ app.get('/download', (req, res) => {
         const sanitizedTitle = (title || 'video').replace(/[^a-zA-Z0-9-_ ]/g, '').trim();
         res.header('Content-Disposition', `attachment; filename="${sanitizedTitle}.mp4"`);
 
-        // Stream the download
-        const stream = ytDlpWrap.execStream([
+        const args = [
             url,
             '-f', itag
-        ]);
+        ];
+
+        const cookiesPath = path.join(__dirname, 'cookies.txt');
+        if (fs.existsSync(cookiesPath)) {
+            args.push('--cookies', cookiesPath);
+        }
+
+        // Stream the download
+        const stream = ytDlpWrap.execStream(args);
 
         stream.pipe(res);
 
