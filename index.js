@@ -136,8 +136,6 @@ app.get('/api/video-info', async (req, res) => {
             console.error('[Strategy 1] Failed:', error.message);
             errorLog.push({ strategy: 'yt-dlp', error: error.message, stderr: error.stderr });
         }
-    } else {
-        console.warn('[Strategy 1] Skipped: yt-dlp binary missing');
     }
 
     // STRATEGY 2: Try @distube/ytdl-core (Fallback)
