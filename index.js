@@ -4,16 +4,18 @@ const YTDlpWrap = require('yt-dlp-wrap').default;
 const ytDlpWrap = new YTDlpWrap();
 const path = require('path');
 const fs = require('fs');
+// Fallback library
+const ytdl = require('@distube/ytdl-core');
 
 // Ensure yt-dlp binary is available
 const binaryName = process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp';
 const binaryPath = path.join(__dirname, binaryName);
 
-// Download binary if not present
+// Download or Update binary
 (async () => {
-    if (!fs.existsSync(binaryPath)) {
-        console.log(`Downloading ${binaryName}...`);
-        try {
+    try {
+        if (!fs.existsSync(binaryPath)) {
+            console.log(`Downloading ${binaryName}...`);
             await YTDlpWrap.downloadFromGithub(binaryPath);
             console.log(`${binaryName} downloaded successfully`);
 
@@ -21,21 +23,21 @@ const binaryPath = path.join(__dirname, binaryName);
             if (process.platform !== 'win32') {
                 fs.chmodSync(binaryPath, '755');
             }
-
-            ytDlpWrap.setBinaryPath(binaryPath);
-        } catch (err) {
-            console.error(`Failed to download ${binaryName}:`, err);
+        } else {
+            // Attempt to update existing binary
+            console.log(`${binaryName} exists. Checking for updates...`);
+            // We can't easily use -U via the wrapper class methods directly effectively if we want to keep it simple, 
+            // but we can just run the command. However, on read-only filesystems this might fail. 
+            // Failsafe: just set path.
+            console.log('Skipping auto-update to avoid permissions issues in some envs, utilizing existing binary.');
         }
-    } else {
-        console.log(`${binaryName} already exists`);
-        ytDlpWrap.setBinaryPath(binaryPath);
-    }
 
-    try {
+        ytDlpWrap.setBinaryPath(binaryPath);
+
         const version = await ytDlpWrap.execPromise(['--version']);
         console.log(`yt-dlp version: ${version.trim()}`);
     } catch (err) {
-        console.error('Failed to get yt-dlp version:', err);
+        console.error(`Failed to initialize ${binaryName}:`, err);
     }
 })();
 
@@ -54,6 +56,19 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 // -------------------------
 
+// Helper to format ytdl-core formats to match yt-dlp output structure
+const formatYtdlQualities = (formats) => {
+    return formats
+        .filter(f => f.hasVideo && f.hasAudio) // Filter for ones with both if possible, or we can adapt to separate streams later
+        .map(f => ({
+            label: f.qualityLabel || 'Unknown',
+            size: f.contentLength ? (parseInt(f.contentLength) / 1024 / 1024).toFixed(2) + ' MB' : 'Unknown', // ytdl uses contentLength string
+            hd: (f.height || 0) >= 720,
+            url: f.url,
+            itag: f.itag
+        }));
+};
+
 // API Endpoint to get video info
 app.get('/api/video-info', async (req, res) => {
     const videoUrl = req.query.url;
@@ -63,68 +78,95 @@ app.get('/api/video-info', async (req, res) => {
         return res.status(400).json({ error: 'URL is required' });
     }
 
-    // Check if binary exists before attempting to use it
-    if (!fs.existsSync(ytDlpWrap.getBinaryPath())) {
-        console.error(`yt-dlp binary not found at: ${ytDlpWrap.getBinaryPath()}`);
-        return res.status(500).json({ error: 'Server configuration error: yt-dlp binary missing' });
+    let errorLog = [];
+
+    // STRATEGY 1: Try yt-dlp (Primary)
+    if (fs.existsSync(ytDlpWrap.getBinaryPath())) {
+        try {
+            console.log(`[Strategy 1] Fetching metadata using yt-dlp...`);
+
+            const stdout = await ytDlpWrap.execPromise([
+                videoUrl,
+                '--dump-json',
+                '--no-playlist',
+                '--extractor-args', 'youtube:player_client=default',
+                '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            ]);
+
+            const metadata = JSON.parse(stdout);
+
+            const qualities = metadata.formats
+                .filter(format => format.vcodec !== 'none' && format.acodec !== 'none')
+                .map(format => ({
+                    label: format.format_note || format.resolution || 'Unknown',
+                    size: format.filesize ? (format.filesize / 1024 / 1024).toFixed(2) + ' MB' : 'Unknown',
+                    hd: format.height >= 720,
+                    url: format.url,
+                    itag: format.format_id
+                }));
+
+            const videoData = {
+                title: metadata.title,
+                duration: new Date(metadata.duration * 1000).toISOString().substr(11, 8),
+                thumbnail: metadata.thumbnail,
+                qualities
+            };
+
+            console.log(`[Strategy 1] Success: ${metadata.title}`);
+            return res.json(videoData);
+
+        } catch (error) {
+            console.error('[Strategy 1] Failed:', error.message);
+            errorLog.push({ strategy: 'yt-dlp', error: error.message, stderr: error.stderr });
+        }
+    } else {
+        console.warn('[Strategy 1] Skipped: yt-dlp binary missing');
     }
 
+    // STRATEGY 2: Try @distube/ytdl-core (Fallback)
     try {
-        console.log(`Fetching metadata using binary at: ${ytDlpWrap.getBinaryPath()}`);
+        console.log(`[Strategy 2] Attempting fallback with @distube/ytdl-core...`);
 
-        // Use execPromise to pass custom arguments
-        // --dump-json: Get metadata as JSON
-        // --no-playlist: Ensure we only get the video, not a whole playlist
-        // --extractor-args "youtube:player_client=default": Fix "No supported JavaScript runtime" warning
-        // --user-agent: Mimic a real browser to avoid some blocks
-        const stdout = await ytDlpWrap.execPromise([
-            videoUrl,
-            '--dump-json',
-            '--no-playlist',
-            '--extractor-args', 'youtube:player_client=default',
-            '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        ]);
+        const info = await ytdl.getInfo(videoUrl);
 
-        const metadata = JSON.parse(stdout);
+        // formats with both audio and video
+        let formats = ytdl.filterFormats(info.formats, 'audioandvideo');
 
-        const title = metadata.title;
-        const duration = metadata.duration; // in seconds
-        const thumbnail = metadata.thumbnail;
+        // If no mixed formats, try all formats and let frontend decide (or just video)
+        if (formats.length === 0) {
+            formats = info.formats;
+        }
 
-        // Map formats
-        // yt-dlp formats are slightly different
-        const qualities = metadata.formats
-            .filter(format => format.vcodec !== 'none' && format.acodec !== 'none') // Video + Audio
-            .map(format => ({
-                label: format.format_note || format.resolution || 'Unknown',
-                size: format.filesize ? (format.filesize / 1024 / 1024).toFixed(2) + ' MB' : 'Unknown',
-                hd: format.height >= 720,
-                url: format.url,
-                itag: format.format_id // yt-dlp uses format_id
-            }));
+        const qualities = formats.map(format => ({
+            label: format.qualityLabel || 'Unknown',
+            size: format.contentLength ? (parseInt(format.contentLength) / 1024 / 1024).toFixed(2) + ' MB' : 'Unknown',
+            hd: (format.height || 0) >= 720,
+            url: format.url,
+            itag: format.itag
+        }));
 
         const videoData = {
-            title,
-            duration: new Date(duration * 1000).toISOString().substr(11, 8),
-            thumbnail,
+            title: info.videoDetails.title,
+            duration: new Date(info.videoDetails.lengthSeconds * 1000).toISOString().substr(11, 8),
+            thumbnail: info.videoDetails.thumbnails[0]?.url,
             qualities
         };
 
-        console.log(`Successfully retrieved metadata for: ${title}`);
-        res.json(videoData);
+        console.log(`[Strategy 2] Success: ${info.videoDetails.title}`);
+        return res.json(videoData);
+
     } catch (error) {
-        console.error('Error fetching video info:', error);
-        console.error('Error message:', error.message);
-        console.error('Error stack:', error.stack);
-        if (error.stderr) {
-            console.error('yt-dlp stderr:', error.stderr);
-        }
-        res.status(500).json({
-            error: 'Unable to retrieve video details',
-            details: error.message,
-            stderr: error.stderr || 'No stderr available'
-        });
+        console.error('[Strategy 2] Failed:', error.message);
+        errorLog.push({ strategy: 'ytdl-core', error: error.message });
     }
+
+    // If both failed
+    console.error('All strategies failed for URL:', videoUrl);
+    res.status(500).json({
+        error: 'Unable to retrieve video details',
+        details: 'All retrieval methods failed.',
+        logs: errorLog
+    });
 });
 
 // API Endpoint to trigger download
