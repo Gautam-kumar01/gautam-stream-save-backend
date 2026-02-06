@@ -18,18 +18,18 @@ const binaryPath = path.join(__dirname, binaryName);
             console.log(`Downloading ${binaryName}...`);
             await YTDlpWrap.downloadFromGithub(binaryPath);
             console.log(`${binaryName} downloaded successfully`);
-
-            // Ensure executable permissions on Linux/Mac
-            if (process.platform !== 'win32') {
-                fs.chmodSync(binaryPath, '755');
-            }
         } else {
-            // Attempt to update existing binary
-            console.log(`${binaryName} exists. Checking for updates...`);
-            // We can't easily use -U via the wrapper class methods directly effectively if we want to keep it simple, 
-            // but we can just run the command. However, on read-only filesystems this might fail. 
-            // Failsafe: just set path.
-            console.log('Skipping auto-update to avoid permissions issues in some envs, utilizing existing binary.');
+            console.log(`${binaryName} exists. Skipping download.`);
+        }
+
+        // ALWAYS ensure executable permissions on Linux/Mac/Render
+        if (process.platform !== 'win32') {
+            try {
+                console.log(`Setting permissions for ${binaryName}...`);
+                fs.chmodSync(binaryPath, '777'); // 777 to be absolutely sure in this env
+            } catch (pErr) {
+                console.error('Error setting permissions:', pErr);
+            }
         }
 
         ytDlpWrap.setBinaryPath(binaryPath);
