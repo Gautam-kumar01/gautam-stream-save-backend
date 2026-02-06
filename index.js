@@ -12,8 +12,28 @@ const binaryName = process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp';
 const binaryPath = path.join(__dirname, binaryName);
 
 // Download or Update binary
-(async () => {
+const initPromise = (async () => {
     try {
+        if (process.platform !== 'win32') {
+            // Check if binary is actually a Windows exe (common mistake when deploying from Windows)
+            try {
+                const fd = fs.openSync(binaryPath, 'r');
+                const buffer = Buffer.alloc(2);
+                fs.readSync(fd, buffer, 0, 2, 0);
+                fs.closeSync(fd);
+
+                if (buffer.toString() === 'MZ') {
+                    console.log('Detected Windows binary on non-Windows system. Deleting and redownloading...');
+                    fs.unlinkSync(binaryPath);
+                }
+            } catch (e) {
+                // Ignore error if file doesn't exist
+                if (e.code !== 'ENOENT') {
+                    console.log('Error checking binary header:', e);
+                }
+            }
+        }
+
         if (!fs.existsSync(binaryPath)) {
             console.log(`Downloading ${binaryName}...`);
             await YTDlpWrap.downloadFromGithub(binaryPath);
